@@ -1,6 +1,11 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { type Plugin, tool } from "@opencode-ai/plugin"
+import {
+  activateAutoTask,
+  autoTaskHandoffInstruction,
+  getAutoTaskState,
+} from "../lib/Asterisk-AutoTaskState"
 
 const BUILDER_AGENT = "Asterisk-Builder"
 const PLAN_DIRECTORY = ".asterisk"
@@ -108,6 +113,11 @@ function validateBuilderStartPrompt(prompt: string) {
   }
 }
 
+function builderPromptWithAutoTask(prompt: string, autoTaskInstruction?: string) {
+  if (!autoTaskInstruction) return prompt
+  return `${autoTaskInstruction}\n\n${prompt}`
+}
+
 async function selectBuilderSession(client: OpenCodeClient, directory: string, sessionID: string): Promise<TuiSelectionResult> {
   try {
     const response = await client.tui.publish({
@@ -189,16 +199,26 @@ export default (async ({ client }) => {
         args: {
           prompt: tool.schema.string().min(1).describe(`Planner-written Builder start prompt. It should summarize the project or task and tell Builder to read ${PLAN_REFERENCE}.`),
           title: tool.schema.string().min(1).max(80).optional().describe(`Optional human-readable ${BUILDER_AGENT} session title.`),
+          autoTask: tool.schema.boolean().optional().describe("Pass active Auto Task Mode to the new Builder session. Use only when the current session has active Auto Task permission."),
         },
         async execute(args, context) {
           const plan = await readPlan(context.directory)
           validateBuilderStartPrompt(args.prompt)
+          const autoTaskState = args.autoTask ? getAutoTaskState(context.sessionID) : undefined
+          if (args.autoTask && !autoTaskState) {
+            throw new Error("Cannot pass Auto Task Mode to Builder because Auto Task is not active for the current session.")
+          }
+          const builderPrompt = builderPromptWithAutoTask(
+            args.prompt,
+            autoTaskState ? autoTaskHandoffInstruction(autoTaskState) : undefined,
+          )
 
           context.metadata({
             title: "Asterisk Builder handoff",
             metadata: {
               targetAgent: BUILDER_AGENT,
               planPath: PLAN_REFERENCE,
+              autoTask: Boolean(autoTaskState),
             },
           })
 
@@ -209,6 +229,7 @@ export default (async ({ client }) => {
             metadata: {
               targetAgent: BUILDER_AGENT,
               planPath: PLAN_REFERENCE,
+              autoTask: Boolean(autoTaskState),
             },
           })
 
@@ -225,6 +246,15 @@ export default (async ({ client }) => {
             throw new Error("Builder session was created, but OpenCode did not return a session ID.")
           }
 
+          if (autoTaskState) {
+            activateAutoTask({
+              sessionID: session.id,
+              source: "builder-handoff",
+              scope: autoTaskState.scope,
+              parentSessionID: context.sessionID,
+            })
+          }
+
           const promptResponse = await client.session.promptAsync({
             path: {
               id: session.id,
@@ -237,7 +267,7 @@ export default (async ({ client }) => {
               parts: [
                 {
                   type: "text",
-                  text: args.prompt,
+                  text: builderPrompt,
                 },
               ],
             },
@@ -253,7 +283,8 @@ export default (async ({ client }) => {
               builderSessionID: session.id,
               planPath: PLAN_REFERENCE,
               planCharacters: plan.length,
-              promptCharacters: args.prompt.length,
+              promptCharacters: builderPrompt.length,
+              autoTask: Boolean(autoTaskState),
               tuiSessionSelected: selection.selected,
               tuiSessionListOpened: selection.fallbackOpened,
             },

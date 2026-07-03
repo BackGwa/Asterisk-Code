@@ -1,49 +1,49 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="${ASTERISK_REPO:-BackGwa/Asterisk-Code}"
-TAG="${ASTERISK_TAG:-main}"
-TEMP_DIR="$(mktemp -d)"
-trap 'rm -rf "$TEMP_DIR"' EXIT
+REPO_URL="${ASTERISK_REPO_URL:-https://github.com/BackGwa/Asterisk-Code.git}"
+REF="${ASTERISK_REF:-main}"
+SOURCE_DIR="${ASTERISK_SOURCE_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || pwd)}"
+OPENCODE_SOURCE_DIR="${SOURCE_DIR}/.opencode"
 GLOBAL_CONFIG_DIR="${HOME}/.config/opencode"
-INSTALL_DIR="${ASTERISK_INSTALL_DIR:-${GLOBAL_CONFIG_DIR}/asterisk}"
 AGENTS_DIR="${GLOBAL_CONFIG_DIR}/agents"
 PLUGINS_DIR="${GLOBAL_CONFIG_DIR}/plugins"
-TUI_DIR="${INSTALL_DIR}/tui"
-TUI_PLUGIN_PATH="${TUI_DIR}/Asterisk-Code.ts"
-TUI_PLUGIN_URI="file://${TUI_PLUGIN_PATH}"
+COMMANDS_DIR="${GLOBAL_CONFIG_DIR}/commands"
+LIB_DIR="${GLOBAL_CONFIG_DIR}/lib"
+TUI_DIR="${GLOBAL_CONFIG_DIR}/tui"
 GLOBAL_TUI="${GLOBAL_CONFIG_DIR}/tui.jsonc"
+TEMP_DIR=""
 
-curl -fsSL "https://api.github.com/repos/${REPO}/tarball/${TAG}" -o "${TEMP_DIR}/repo.tar.gz"
-tar xzf "${TEMP_DIR}/repo.tar.gz" -C "$TEMP_DIR" --strip-components=1
+if [ ! -d "$OPENCODE_SOURCE_DIR" ]; then
+  if ! command -v git >/dev/null 2>&1; then
+    echo "git is required for remote installation." >&2
+    exit 1
+  fi
 
-mkdir -p "$AGENTS_DIR" "$PLUGINS_DIR" "$TUI_DIR"
-cp -R "$TEMP_DIR"/.opencode/agents/. "$AGENTS_DIR"/
-cp -R "$TEMP_DIR"/.opencode/plugins/. "$PLUGINS_DIR"/
-cp -R "$TEMP_DIR"/.opencode/tui/. "$TUI_DIR"/
-rm -f "${TUI_DIR}/Asterisk-Tui.ts"
-
-if [ ! -f "$GLOBAL_TUI" ]; then
-  mkdir -p "$GLOBAL_CONFIG_DIR"
-  cat > "$GLOBAL_TUI" <<-EOF
-{
-  "\$schema": "https://opencode.ai/tui.json",
-  "plugin": ["${TUI_PLUGIN_URI}"]
-}
-EOF
-elif grep -Eq "Asterisk-(Tui|Code)\.ts" "$GLOBAL_TUI"; then
-  ESCAPED_TUI_PLUGIN_URI="$(printf '%s' "$TUI_PLUGIN_URI" | sed 's/[\/&|]/\\&/g')"
-  sed -i.bak "s|file://[^\"]*Asterisk-Tui\.ts|${ESCAPED_TUI_PLUGIN_URI}|g" "$GLOBAL_TUI"
-  sed -i.bak "s|file://[^\"]*Asterisk-Code\.ts|${ESCAPED_TUI_PLUGIN_URI}|g" "$GLOBAL_TUI"
-  rm -f "${GLOBAL_TUI}.bak"
-else
-  echo "Global TUI config already exists and was not modified."
-  echo "Add this plugin path to ${GLOBAL_TUI}: ${TUI_PLUGIN_URI}"
+  TEMP_DIR="$(mktemp -d)"
+  trap 'rm -rf "$TEMP_DIR"' EXIT
+  git clone --depth 1 --branch "$REF" "$REPO_URL" "$TEMP_DIR"
+  SOURCE_DIR="$TEMP_DIR"
+  OPENCODE_SOURCE_DIR="${SOURCE_DIR}/.opencode"
 fi
 
-mkdir -p "$INSTALL_DIR"
+mkdir -p "$AGENTS_DIR" "$PLUGINS_DIR" "$COMMANDS_DIR" "$LIB_DIR" "$TUI_DIR"
+cp -R "${OPENCODE_SOURCE_DIR}/agents/." "$AGENTS_DIR"/
+cp -R "${OPENCODE_SOURCE_DIR}/plugins/." "$PLUGINS_DIR"/
+cp -R "${OPENCODE_SOURCE_DIR}/commands/." "$COMMANDS_DIR"/
+cp -R "${OPENCODE_SOURCE_DIR}/lib/." "$LIB_DIR"/
+cp -R "${OPENCODE_SOURCE_DIR}/tui/." "$TUI_DIR"/
+
+if [ ! -f "$GLOBAL_TUI" ]; then
+  cp "${OPENCODE_SOURCE_DIR}/tui.jsonc" "$GLOBAL_TUI"
+else
+  echo "Global TUI config already exists and was not modified."
+  echo "Add ./tui/Asterisk-Code.ts to ${GLOBAL_TUI} if Asterisk TUI is not already configured."
+fi
 
 echo "Installed Asterisk agents to ${AGENTS_DIR}"
 echo "Installed Asterisk plugins to ${PLUGINS_DIR}"
-echo "Installed Asterisk support files to ${INSTALL_DIR}"
+echo "Installed Asterisk commands to ${COMMANDS_DIR}"
+echo "Installed Asterisk libraries to ${LIB_DIR}"
+echo "Installed Asterisk TUI to ${TUI_DIR}"
 echo "Global TUI config: ${GLOBAL_TUI}"
