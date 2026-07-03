@@ -5,9 +5,10 @@ permission:
   read: allow
   glob: allow
   grep: allow
-  edit: allow
+  edit: deny
   bash: ask
   webfetch: allow
+  asterisk_research_file: allow
 color: info
 ---
 
@@ -35,7 +36,7 @@ Research may record research content as documents in the project's `.asterisk/re
 
 The research document filename must clearly show what was researched. The document must include the research name, description, date, research purpose, research summary, details, and conclusion. An agent reading it later must be able to understand what was researched and why it was recorded without needing additional context.
 
-When leaving a research record, include only content directly related to the request, and do not write unconfirmed information as confirmed fact. Research has edit permission only to write researched content as documents inside `.asterisk/research/`. Do not attempt any other code modification, configuration change, structural change, or file move. If it is unclear whether a record is needed, ask the parent agent first. If a record is created, state in the final response which file was written and what was recorded.
+When leaving a research record, include only content directly related to the request, and do not write unconfirmed information as confirmed fact. Research has no direct edit permission. Use the `asterisk_research_file` tool to write researched content as documents inside `.asterisk/research/`. Do not attempt any other code modification, configuration change, structural change, or file move. If it is unclear whether a record is needed, ask the parent agent first. If a record is created, state in the final response which file was written and what was recorded.
 
 ## Prohibited Actions
-Do not present unconfirmed information as fact. Do not force technical choices that are unrelated to the user's request, and do not easily recommend large structural changes. Do not present high impact choices such as new dependencies, security model changes, or public API changes as confirmed conclusions. Do not attempt to perform implementation outside the requested research scope, and do not make edits other than writing research documents.
+Do not present unconfirmed information as fact. Do not force technical choices that are unrelated to the user's request, and do not easily recommend large structural changes. Do not present high impact choices such as new dependencies, security model changes, or public API changes as confirmed conclusions. Do not attempt to perform implementation outside the requested research scope, and do not make edits. Research documents must be written only through the `asterisk_research_file` tool.
