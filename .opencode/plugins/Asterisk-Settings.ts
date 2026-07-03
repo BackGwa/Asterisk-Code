@@ -11,7 +11,7 @@ type AsteriskSettings = {
     sensitiveInformation?: boolean
   }
   agentModels?: Record<string, string>
-  agentReasoningEfforts?: Record<string, string>
+  agentModelVariants?: Record<string, string>
 }
 
 function settingsPath() {
@@ -37,9 +37,9 @@ function applyAgentModels(config: Config, settings: AsteriskSettings) {
     config.agent[agentName] ??= {}
     config.agent[agentName].model = model
 
-    const reasoningEffort = settings.agentReasoningEfforts?.[agentName]
-    if (reasoningEffort) {
-      config.agent[agentName].reasoningEffort = reasoningEffort
+    const modelVariant = settings.agentModelVariants?.[agentName]
+    if (modelVariant) {
+      config.agent[agentName].variant = modelVariant
     }
   }
 }
