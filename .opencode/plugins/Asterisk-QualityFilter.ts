@@ -88,7 +88,7 @@ function buildWarning(findings: Finding[]) {
 
 function createTextPart(base: Part | undefined, text: string): Part {
   return {
-    id: `asterisk-quality-filter-${Date.now()}`,
+    id: `prt_asterisk_quality_filter_${Date.now()}`,
     sessionID: base?.sessionID ?? "",
     messageID: base?.messageID ?? "",
     type: "text",

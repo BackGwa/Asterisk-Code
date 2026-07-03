@@ -43,7 +43,7 @@ function mutableSystem(output: SystemOutput) {
 
 function createTextPart(sessionID: string, text: string): Part {
   return {
-    id: `asterisk-auto-task-${Date.now()}`,
+    id: `prt_asterisk_auto_task_${Date.now()}`,
     sessionID,
     messageID: "",
     type: "text",
@@ -53,7 +53,15 @@ function createTextPart(sessionID: string, text: string): Part {
 }
 
 function prependTextPart(output: CommandOutput, sessionID: string, text: string) {
-  mutableParts(output).unshift(createTextPart(sessionID, text))
+  const parts = mutableParts(output)
+  const firstPart = parts[0]
+
+  if (firstPart?.type === "text") {
+    firstPart.text = `${text}\n\n${firstPart.text}`
+    return
+  }
+
+  parts.unshift(createTextPart(sessionID, text))
 }
 
 function commandActivationText(requirements: string) {
