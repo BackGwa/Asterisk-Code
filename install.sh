@@ -10,7 +10,7 @@ INSTALL_DIR="${ASTERISK_INSTALL_DIR:-${GLOBAL_CONFIG_DIR}/asterisk}"
 AGENTS_DIR="${GLOBAL_CONFIG_DIR}/agents"
 PLUGINS_DIR="${GLOBAL_CONFIG_DIR}/plugins"
 TUI_DIR="${INSTALL_DIR}/tui"
-TUI_PLUGIN_PATH="${TUI_DIR}/Asterisk-Tui.ts"
+TUI_PLUGIN_PATH="${TUI_DIR}/Asterisk-Code.ts"
 TUI_PLUGIN_URI="file://${TUI_PLUGIN_PATH}"
 GLOBAL_TUI="${GLOBAL_CONFIG_DIR}/tui.jsonc"
 
@@ -21,6 +21,7 @@ mkdir -p "$AGENTS_DIR" "$PLUGINS_DIR" "$TUI_DIR"
 cp -R "$TEMP_DIR"/.opencode/agents/. "$AGENTS_DIR"/
 cp -R "$TEMP_DIR"/.opencode/plugins/. "$PLUGINS_DIR"/
 cp -R "$TEMP_DIR"/.opencode/tui/. "$TUI_DIR"/
+rm -f "${TUI_DIR}/Asterisk-Tui.ts"
 
 if [ ! -f "$GLOBAL_TUI" ]; then
   mkdir -p "$GLOBAL_CONFIG_DIR"
@@ -30,9 +31,10 @@ if [ ! -f "$GLOBAL_TUI" ]; then
   "plugin": ["${TUI_PLUGIN_URI}"]
 }
 EOF
-elif grep -q "Asterisk-Tui.ts" "$GLOBAL_TUI"; then
+elif grep -Eq "Asterisk-(Tui|Code)\.ts" "$GLOBAL_TUI"; then
   ESCAPED_TUI_PLUGIN_URI="$(printf '%s' "$TUI_PLUGIN_URI" | sed 's/[\/&|]/\\&/g')"
   sed -i.bak "s|file://[^\"]*Asterisk-Tui\.ts|${ESCAPED_TUI_PLUGIN_URI}|g" "$GLOBAL_TUI"
+  sed -i.bak "s|file://[^\"]*Asterisk-Code\.ts|${ESCAPED_TUI_PLUGIN_URI}|g" "$GLOBAL_TUI"
   rm -f "${GLOBAL_TUI}.bak"
 else
   echo "Global TUI config already exists and was not modified."

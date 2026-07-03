@@ -397,7 +397,7 @@ const tui: TuiPlugin = async (api) => {
 }
 
 const plugin: TuiPluginModule = {
-  id: "Asterisk-Tui",
+  id: "Asterisk-Code",
   tui,
 }
 

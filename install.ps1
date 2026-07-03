@@ -29,9 +29,10 @@ try {
         Copy-Item -Recurse -Force (Join-Path $extractDir ".opencode\agents\*") $agentsDir
         Copy-Item -Recurse -Force (Join-Path $extractDir ".opencode\plugins\*") $pluginsDir
         Copy-Item -Recurse -Force (Join-Path $extractDir ".opencode\tui\*") $tuiDir
+        Remove-Item -Force (Join-Path $tuiDir "Asterisk-Tui.ts") -ErrorAction SilentlyContinue
     }
 
-    $tuiPluginPath = Join-Path $tuiDir "Asterisk-Tui.ts"
+    $tuiPluginPath = Join-Path $tuiDir "Asterisk-Code.ts"
     $pluginPath = [System.Uri]::new((Resolve-Path $tuiPluginPath).Path).AbsoluteUri
     if (-not (Test-Path $globalTui)) {
         New-Item -ItemType Directory -Path $globalConfigDir -Force | Out-Null
@@ -43,10 +44,10 @@ try {
 "@ | Out-File -FilePath $globalTui -Encoding utf8
     } else {
         $globalTuiText = Get-Content -Raw -Path $globalTui
-        if ($globalTuiText -match "Asterisk-Tui\.ts") {
+        if ($globalTuiText -match "Asterisk-(Tui|Code)\.ts") {
             $updatedGlobalTuiText = [regex]::Replace(
                 $globalTuiText,
-                'file://[^"]*Asterisk-Tui\.ts',
+                'file://[^"]*Asterisk-(Tui|Code)\.ts',
                 [System.Text.RegularExpressions.MatchEvaluator]{ param($match) $pluginPath }
             )
             $updatedGlobalTuiText | Out-File -FilePath $globalTui -Encoding utf8
