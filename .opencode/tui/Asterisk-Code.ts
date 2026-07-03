@@ -167,10 +167,27 @@ function findModelOption(api: Parameters<TuiPlugin>[0], modelValue: string | und
   return modelOptions(api).find((model) => model.value === modelValue)
 }
 
+function configuredModelValue(api: Parameters<TuiPlugin>[0], agent: string) {
+  const agentModel = api.state.config.agent?.[agent]?.model
+  if (typeof agentModel === "string" && agentModel) return agentModel
+
+  const defaultModel = api.state.config.model
+  return typeof defaultModel === "string" && defaultModel ? defaultModel : undefined
+}
+
+function effectiveModelValue(api: Parameters<TuiPlugin>[0], settings: AsteriskSettings, agent: string) {
+  return settings.agentModels[agent] || configuredModelValue(api, agent)
+}
+
+function effectiveModelOption(api: Parameters<TuiPlugin>[0], settings: AsteriskSettings, agent: string) {
+  return findModelOption(api, effectiveModelValue(api, settings, agent))
+}
+
 function agentModelDescription(settings: AsteriskSettings, agent: string) {
   const model = settings.agentModels[agent]
   const modelVariant = settings.agentModelVariants[agent]
 
+  if (!model && modelVariant) return `Default model, variant ${modelVariant}`
   if (!model) return "Default model"
   if (!modelVariant) return model
   return `${model}, variant ${modelVariant}`
@@ -179,7 +196,7 @@ function agentModelDescription(settings: AsteriskSettings, agent: string) {
 function reasoningEffortDescription(settings: AsteriskSettings, agent: string, model: ModelOption | undefined) {
   const modelVariant = settings.agentModelVariants[agent]
 
-  if (!settings.agentModels[agent]) return "Select a reasoning-capable model first"
+  if (!model) return "Default model is not available"
   if (!model?.supportsReasoning) return "Selected model does not support reasoning"
   if (model.reasoningVariants.length === 0) return "Selected model does not expose reasoning options"
   if (!modelVariant) return "Default reasoning option"
@@ -275,7 +292,7 @@ async function openAgentList(api: Parameters<TuiPlugin>[0], stack: TuiDialogStac
 
 async function openAgentModelSettings(api: Parameters<TuiPlugin>[0], stack: TuiDialogStack, agent: string) {
   const settings = await readSettings()
-  const selectedModel = findModelOption(api, settings.agentModels[agent])
+  const selectedModel = effectiveModelOption(api, settings, agent)
   const canSetReasoningEffort = Boolean(selectedModel?.supportsReasoning && selectedModel.reasoningVariants.length > 0)
 
   stack.replace(() => api.ui.DialogSelect({
@@ -313,7 +330,10 @@ async function openModelList(api: Parameters<TuiPlugin>[0], stack: TuiDialogStac
         description: "Remove the Asterisk model override for this agent",
         onSelect: async () => {
           delete settings.agentModels[agent]
-          delete settings.agentModelVariants[agent]
+          const defaultModel = effectiveModelOption(api, settings, agent)
+          if (!defaultModel?.reasoningVariants.some((variant) => variant.value === settings.agentModelVariants[agent])) {
+            delete settings.agentModelVariants[agent]
+          }
           await writeSettings(settings)
           api.ui.toast({ message: `${agent} model reset. Restart opencode to apply agent model changes.`, variant: "success" })
           await openAgentModelSettings(api, stack, agent)
@@ -342,7 +362,7 @@ async function openModelList(api: Parameters<TuiPlugin>[0], stack: TuiDialogStac
 
 async function openReasoningEffortList(api: Parameters<TuiPlugin>[0], stack: TuiDialogStack, agent: string) {
   const settings = await readSettings()
-  const selectedModel = findModelOption(api, settings.agentModels[agent])
+  const selectedModel = effectiveModelOption(api, settings, agent)
 
   if (!selectedModel?.supportsReasoning || selectedModel.reasoningVariants.length === 0) {
     await openAgentModelSettings(api, stack, agent)
