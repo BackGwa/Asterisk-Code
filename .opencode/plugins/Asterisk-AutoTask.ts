@@ -5,6 +5,7 @@ import {
   autoTaskSystemInstruction,
   deactivateAutoTask,
   getAutoTaskState,
+  rememberAutoTaskSessionParent,
 } from "../lib/Asterisk-AutoTaskState"
 
 const AUTO_TASK_COMMAND = "autotask"
@@ -52,12 +53,12 @@ function createTextPart(sessionID: string, text: string): Part {
   }
 }
 
-function prependTextPart(output: CommandOutput, sessionID: string, text: string) {
+function setTextPart(output: CommandOutput, sessionID: string, text: string) {
   const parts = mutableParts(output)
   const firstPart = parts[0]
 
   if (firstPart?.type === "text") {
-    firstPart.text = `${text}\n\n${firstPart.text}`
+    firstPart.text = text
     return
   }
 
@@ -83,6 +84,12 @@ function activationOutput(scope: string) {
 
 export default (async () => {
   return {
+    event: async (input) => {
+      if (input.event.type !== "session.created") return
+      const session = input.event.properties.info
+      rememberAutoTaskSessionParent(session.id, session.parentID)
+    },
+
     tool: {
       asterisk_auto_task: tool({
         description: "Activate, inspect, or stop Auto Task Mode for the current session.",
@@ -155,7 +162,7 @@ export default (async () => {
 
       const requirements = normalizeCommandArguments(input.arguments)
       if (!requirements) {
-        prependTextPart(output, input.sessionID, "Use `/autotask <requirements>` to start Auto Task Mode.")
+        setTextPart(output, input.sessionID, "Use `/autotask <requirements>` to start Auto Task Mode.")
         return
       }
 
@@ -165,7 +172,7 @@ export default (async () => {
         scope: requirements,
       })
 
-      prependTextPart(output, input.sessionID, commandActivationText(requirements))
+      setTextPart(output, input.sessionID, commandActivationText(requirements))
     },
 
     "permission.ask": async (input, output) => {

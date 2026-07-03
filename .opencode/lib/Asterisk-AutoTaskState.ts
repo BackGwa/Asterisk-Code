@@ -17,6 +17,7 @@ type ActivateAutoTaskInput = {
 }
 
 const autoTaskSessions = new Map<string, AutoTaskState>()
+const autoTaskSessionParents = new Map<string, string>()
 
 export function activateAutoTask(input: ActivateAutoTaskInput) {
   const state: AutoTaskState = {
@@ -29,6 +30,9 @@ export function activateAutoTask(input: ActivateAutoTaskInput) {
   }
 
   autoTaskSessions.set(input.sessionID, state)
+  if (input.parentSessionID) {
+    autoTaskSessionParents.set(input.sessionID, input.parentSessionID)
+  }
   return state
 }
 
@@ -38,7 +42,25 @@ export function deactivateAutoTask(sessionID: string) {
 
 export function getAutoTaskState(sessionID?: string) {
   if (!sessionID) return undefined
-  return autoTaskSessions.get(sessionID)
+
+  let currentSessionID: string | undefined = sessionID
+  const visitedSessionIDs = new Set<string>()
+
+  while (currentSessionID && !visitedSessionIDs.has(currentSessionID)) {
+    visitedSessionIDs.add(currentSessionID)
+
+    const state = autoTaskSessions.get(currentSessionID)
+    if (state) return state
+
+    currentSessionID = autoTaskSessionParents.get(currentSessionID)
+  }
+
+  return undefined
+}
+
+export function rememberAutoTaskSessionParent(sessionID: string, parentSessionID?: string) {
+  if (!parentSessionID) return
+  autoTaskSessionParents.set(sessionID, parentSessionID)
 }
 
 export function autoTaskSystemInstruction(state: AutoTaskState) {
