@@ -1,6 +1,12 @@
 $repo = if ($env:ASTERISK_REPO) { $env:ASTERISK_REPO } else { "BackGwa/Asterisk-Code" }
 $tag = if ($env:ASTERISK_TAG) { $env:ASTERISK_TAG } else { "main" }
 $tempDir = Join-Path $env:TEMP "asterisk-$(Get-Random)"
+$globalConfigDir = Join-Path $env:USERPROFILE ".config\opencode"
+$installDir = if ($env:ASTERISK_INSTALL_DIR) { $env:ASTERISK_INSTALL_DIR } else { Join-Path $globalConfigDir "asterisk" }
+$agentsDir = Join-Path $globalConfigDir "agents"
+$pluginsDir = Join-Path $globalConfigDir "plugins"
+$tuiDir = Join-Path $installDir "tui"
+$globalTui = Join-Path $globalConfigDir "tui.jsonc"
 
 New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
 try {
@@ -18,27 +24,43 @@ try {
         exit 1
     }
 
-    $opencodeDir = Join-Path (Get-Location) ".opencode"
     if (Test-Path (Join-Path $extractDir ".opencode")) {
-        Copy-Item -Recurse -Force (Join-Path $extractDir ".opencode") (Get-Location)
+        New-Item -ItemType Directory -Path $agentsDir, $pluginsDir, $tuiDir -Force | Out-Null
+        Copy-Item -Recurse -Force (Join-Path $extractDir ".opencode\agents\*") $agentsDir
+        Copy-Item -Recurse -Force (Join-Path $extractDir ".opencode\plugins\*") $pluginsDir
+        Copy-Item -Recurse -Force (Join-Path $extractDir ".opencode\tui\*") $tuiDir
     }
 
-    $globalTui = Join-Path $env:USERPROFILE ".config\opencode\tui.jsonc"
+    $tuiPluginPath = Join-Path $tuiDir "Asterisk-Tui.ts"
+    $pluginPath = [System.Uri]::new((Resolve-Path $tuiPluginPath).Path).AbsoluteUri
     if (-not (Test-Path $globalTui)) {
-        $pluginPath = "file://$(Resolve-Path (Join-Path $opencodeDir 'tui\Asterisk-Tui.ts'))"
-        New-Item -ItemType Directory -Path (Split-Path $globalTui -Parent) -Force | Out-Null
+        New-Item -ItemType Directory -Path $globalConfigDir -Force | Out-Null
         @"
 {
   "`$schema": "https://opencode.ai/tui.json",
   "plugin": ["$pluginPath"]
 }
 "@ | Out-File -FilePath $globalTui -Encoding utf8
+    } else {
+        $globalTuiText = Get-Content -Raw -Path $globalTui
+        if ($globalTuiText -match "Asterisk-Tui\.ts") {
+            $updatedGlobalTuiText = [regex]::Replace(
+                $globalTuiText,
+                'file://[^"]*Asterisk-Tui\.ts',
+                [System.Text.RegularExpressions.MatchEvaluator]{ param($match) $pluginPath }
+            )
+            $updatedGlobalTuiText | Out-File -FilePath $globalTui -Encoding utf8
+        } else {
+            Write-Host "Global TUI config already exists and was not modified."
+            Write-Host "Add this plugin path to ${globalTui}: $pluginPath"
+        }
     }
 
-    $settingsDir = Join-Path $env:USERPROFILE ".config\opencode\asterisk"
-    New-Item -ItemType Directory -Path $settingsDir -Force | Out-Null
+    New-Item -ItemType Directory -Path $installDir -Force | Out-Null
 
-    Write-Host "Installed Asterisk-Code to .opencode/"
+    Write-Host "Installed Asterisk agents to $agentsDir"
+    Write-Host "Installed Asterisk plugins to $pluginsDir"
+    Write-Host "Installed Asterisk support files to $installDir"
     Write-Host "Global TUI config: $globalTui"
 }
 finally {

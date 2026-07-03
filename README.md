@@ -17,6 +17,9 @@ Asterisk is a multi-agent orchestration toolkit for OpenCode, providing a struct
 
 ## Install
 
+Asterisk installs its OpenCode agents and plugins globally under your home directory, not in the current project directory.
+The installer writes agents and plugins to `~/.config/opencode/` on macOS/Linux and `%USERPROFILE%\.config\opencode\` on Windows.
+
 - macOS/Linux:
   ```
   curl -fsSL https://raw.githubusercontent.com/BackGwa/Asterisk-Code/main/install.sh | bash
