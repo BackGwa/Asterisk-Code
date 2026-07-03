@@ -6,6 +6,8 @@ const BUILDER_AGENT = "Asterisk-Builder"
 const PLAN_DIRECTORY = ".asterisk"
 const PLAN_FILE = "PLANS.md"
 const PLAN_REFERENCE = `${PLAN_DIRECTORY}/${PLAN_FILE}`
+const SESSION_SELECT_EVENT = "tui.session.select"
+const DEFAULT_BUILDER_SESSION_TITLE = BUILDER_AGENT
 
 type SessionInfo = {
   id?: string
@@ -14,6 +16,14 @@ type SessionInfo = {
 type SdkResponse<T> = T | {
   data?: T
   error?: unknown
+}
+
+type OpenCodeClient = Parameters<Plugin>[0]["client"]
+
+type TuiSelectionResult = {
+  selected: boolean
+  fallbackOpened: boolean
+  error?: string
 }
 
 function planPath(directory: string) {
@@ -92,13 +102,66 @@ function assertNoSdkError(response: unknown, action: string) {
   }
 }
 
-function builderPrompt() {
-  return [
-    "Asterisk-Planner approved the implementation plan.",
-    `Read \`${PLAN_REFERENCE}\` first and use that file as the source of truth for the build.`,
-    "Do not rely on a copied plan in this prompt.",
-    "If the plan file is missing, empty, unclear, or conflicts with the user's latest instruction, stop and ask the user a specific question before implementing.",
-  ].join("\n")
+function validateBuilderStartPrompt(prompt: string) {
+  if (!prompt.toLowerCase().includes(PLAN_FILE.toLowerCase())) {
+    throw new Error(`Builder start prompt must mention ${PLAN_REFERENCE}.`)
+  }
+}
+
+async function selectBuilderSession(client: OpenCodeClient, directory: string, sessionID: string): Promise<TuiSelectionResult> {
+  try {
+    const response = await client.tui.publish({
+      query: {
+        directory,
+      },
+      body: {
+        type: SESSION_SELECT_EVENT,
+        properties: {
+          sessionID,
+        },
+      } as never,
+    })
+    assertNoSdkError(response, "Selecting Builder session")
+    return {
+      selected: true,
+      fallbackOpened: false,
+    }
+  } catch (error) {
+    const selectionError = error instanceof Error ? error.message : "Failed to select the Builder session."
+
+    try {
+      const response = await client.tui.openSessions({
+        query: {
+          directory,
+        },
+      })
+      assertNoSdkError(response, "Opening session list")
+      return {
+        selected: false,
+        fallbackOpened: true,
+        error: selectionError,
+      }
+    } catch (fallbackError) {
+      const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : "Failed to open the session list."
+      return {
+        selected: false,
+        fallbackOpened: false,
+        error: `${selectionError} ${fallbackMessage}`,
+      }
+    }
+  }
+}
+
+function handoffOutput(sessionID: string, selection: TuiSelectionResult) {
+  if (selection.selected) {
+    return `Started ${BUILDER_AGENT} session ${sessionID} and switched the TUI to it.`
+  }
+
+  if (selection.fallbackOpened) {
+    return `Started ${BUILDER_AGENT} session ${sessionID}, but automatic TUI switching failed. Opened the session list instead. ${selection.error}`
+  }
+
+  return `Started ${BUILDER_AGENT} session ${sessionID}, but automatic TUI switching failed. ${selection.error}`
 }
 
 export default (async ({ client }) => {
@@ -122,10 +185,14 @@ export default (async ({ client }) => {
         },
       }),
       asterisk_session_bridge: tool({
-        description: `Request approval, create a new ${BUILDER_AGENT} session, and tell it to read ${PLAN_REFERENCE}.`,
-        args: {},
-        async execute(_args, context) {
+        description: `Request approval, create a new ${BUILDER_AGENT} session, and pass Planner's Builder start prompt.`,
+        args: {
+          prompt: tool.schema.string().min(1).describe(`Planner-written Builder start prompt. It should summarize the project or task and tell Builder to read ${PLAN_REFERENCE}.`),
+          title: tool.schema.string().min(1).max(80).optional().describe(`Optional human-readable ${BUILDER_AGENT} session title.`),
+        },
+        async execute(args, context) {
           const plan = await readPlan(context.directory)
+          validateBuilderStartPrompt(args.prompt)
 
           context.metadata({
             title: "Asterisk Builder handoff",
@@ -147,7 +214,7 @@ export default (async ({ client }) => {
 
           const sessionResponse = await client.session.create({
             body: {
-              title: "Asterisk Builder Handoff",
+              title: args.title ?? DEFAULT_BUILDER_SESSION_TITLE,
             },
             query: {
               directory: context.directory,
@@ -170,21 +237,25 @@ export default (async ({ client }) => {
               parts: [
                 {
                   type: "text",
-                  text: builderPrompt(),
+                  text: args.prompt,
                 },
               ],
             },
           })
           assertNoSdkError(promptResponse, "Starting Builder prompt")
+          const selection = await selectBuilderSession(client, context.directory, session.id)
 
           return {
-            title: "Asterisk Builder session started",
-            output: `Created Builder session ${session.id} and asked ${BUILDER_AGENT} to read ${PLAN_REFERENCE}.`,
+            title: `${BUILDER_AGENT} started`,
+            output: handoffOutput(session.id, selection),
             metadata: {
               targetAgent: BUILDER_AGENT,
               builderSessionID: session.id,
               planPath: PLAN_REFERENCE,
               planCharacters: plan.length,
+              promptCharacters: args.prompt.length,
+              tuiSessionSelected: selection.selected,
+              tuiSessionListOpened: selection.fallbackOpened,
             },
           }
         },

@@ -31,7 +31,7 @@ Asterisk is a multi-agent orchestration toolkit for OpenCode, providing a struct
 After installation, start an OpenCode session and use the Asterisk agents.
 
 - To start a new project or modify an existing one, assign either `Asterisk-Planner` or `Asterisk-Builder` as the active agent.
-- `Asterisk-Planner` stores the approved plan in `.asterisk/PLANS.md` and starts a new `Asterisk-Builder` session that reads that file.
+- `Asterisk-Planner` stores the approved plan in `.asterisk/PLANS.md`, starts a new `Asterisk-Builder` session with concise task context, and switches to that session when supported by OpenCode.
 - Enter `/asterisk` in the TUI to configure and control Asterisk.
 
 ## Agents
