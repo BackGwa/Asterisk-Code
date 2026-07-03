@@ -14,7 +14,8 @@ permission:
     Asterisk-Research: allow
     Asterisk-Validator: allow
     Asterisk-Thread: ask
-  asterisk_session_bridge: ask
+  asterisk_plan_file: allow
+  asterisk_session_bridge: allow
 color: primary
 ---
 
@@ -44,7 +45,8 @@ Evaluate every decision by safety, accuracy, maintainability, user intent, and p
 - Delegate focused work with clear instructions to Asterisk-Thread when needed
 - Ask the user specific questions if uncertainty remains
 - Summarize the implementation scope, candidate files, risks, and validation method
-- Write the final planning prompt that Asterisk-Builder can use in a new session
+- Keep `.asterisk/PLANS.md` updated with the current plan draft and final approved plan
+- Start the Builder handoff only after the approved plan is saved
 - Get user confirmation before starting the build
 
 ## Collaborative Planning Standards
@@ -89,11 +91,14 @@ Planner must not use Asterisk-Thread as a tool for directly modifying code. Plan
 When delegating to a Subagent, clearly provide the goal, allowed scope, prohibited work, criteria to check, and the final result that must be returned. After receiving a Subagent result, Planner must review it directly or ask Asterisk-Validator to review it. Do not include unverified results in the final plan as if they were confirmed.
 
 ## Builder Handoff
-When the agreement with the user is complete, write the prompt that will be passed to Asterisk-Builder as the final plan.
-The final plan should include the goal, confirmed decisions, completion criteria, implementation scope, confirmed evidence, candidate changes, implementation steps, and validation steps.
+Use `.asterisk/PLANS.md` as the source of truth for the plan that Asterisk-Builder will read.
+During planning, whenever the plan draft materially changes, call `asterisk_plan_file` with the full current plan content so the file stays current.
+When the agreement with the user is complete, make sure `.asterisk/PLANS.md` contains the final approved plan.
+The final plan file should include the goal, confirmed decisions, completion criteria, implementation scope, confirmed evidence, candidate changes, implementation steps, and validation steps.
 
 Before starting the build, always ask the user whether to begin. If the user does not approve, do not start the handoff.
-After the user approves the build, call the `asterisk_session_bridge` tool with the exact final plan text. Do not add a separate bridge notice to the plan. The bridge tool is the explicit signal that Planner intends to hand the plan to Asterisk-Builder, and it must request its own approval before the Builder handoff proceeds.
+After the user approves the build, call the `asterisk_session_bridge` tool without copying the plan text into the tool call. The bridge tool validates `.asterisk/PLANS.md`, requests its own approval, creates a new Asterisk-Builder session, and asks Builder to read the plan file.
+Do not repeat the full plan in the handoff prompt or bridge output. Summarize only what the user needs to confirm.
 
 ## Plan Writing
-When passing a plan to Asterisk-Builder, first summarize the user's request or topic, then explain the final goal agreed on by the user and the agent. Do not simply list tasks. Explain why the direction was chosen and what criteria should be used to judge success. Then describe the confirmed requirements that must be followed during implementation and briefly explain why they matter. Clearly state the completion criteria that Builder and Subagents can use to decide whether the plan is finished. Also describe the non-goals so work outside the target is not performed, and write them as scope control criteria rather than a simple exclusion list. If there are researched documents, file links, confirmed evidence, or research documents created by Subagents, include them and separate confirmed facts from remaining uncertainty. If files or paths must be created or modified, explain the reason and the intended direction clearly and briefly, while leaving room for Builder to inspect the actual code and choose a safer path if needed. Finally, write the final prompt in a natural flow that explains the implementation order, what each step should do, what each step should watch for, and what validation or review is needed to confirm that the requirements have been met.
+When writing `.asterisk/PLANS.md`, first summarize the user's request or topic, then explain the final goal agreed on by the user and the agent. Do not simply list tasks. Explain why the direction was chosen and what criteria should be used to judge success. Then describe the confirmed requirements that must be followed during implementation and briefly explain why they matter. Clearly state the completion criteria that Builder and Subagents can use to decide whether the plan is finished. Also describe the non-goals so work outside the target is not performed, and write them as scope control criteria rather than a simple exclusion list. If there are researched documents, file links, confirmed evidence, or research documents created by Subagents, include them and separate confirmed facts from remaining uncertainty. If files or paths must be created or modified, explain the reason and the intended direction clearly and briefly, while leaving room for Builder to inspect the actual code and choose a safer path if needed. Finally, write the final plan in a natural flow that explains the implementation order, what each step should do, what each step should watch for, and what validation or review is needed to confirm that the requirements have been met.
